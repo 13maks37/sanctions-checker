@@ -1,13 +1,15 @@
 import requests
+import re
 import pandas as pd
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List
-from difflib import SequenceMatcher
 from tabulate import tabulate
 from tqdm import tqdm
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
+from rapidfuzz.fuzz import partial_ratio
+
 
 SANCTIONS_URLS = {
     "OFAC": "https://www.treasury.gov/ofac/downloads/sdn.csv",
@@ -31,8 +33,21 @@ def download_file(url: str, filename: Path):
         print(f"Ошибка при загрузке {url}: {response.status_code}")
 
 
-def is_similar(a: str, b: str, threshold: float = 0.85) -> bool:
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio() >= threshold
+def normalize_company_name(company_names: str):
+    """
+    Normalizes the company name by removing the content in parentheses
+    """
+    normalize_names = []
+    for name in company_names:
+        name = re.sub(r"\s*\([^()]*\)", "", name).strip()
+        name = re.sub(r"\s+", " ", name).strip()
+        normalize_names.append(name)
+    return normalize_names
+
+
+def is_similar(a: str, b: str, threshold: float = 85) -> bool:
+    ratio = partial_ratio(a.lower(), b.lower())
+    return ratio >= threshold
 
 
 def load_companies_from_excel(filepath: str) -> List[str]:
@@ -42,12 +57,17 @@ def load_companies_from_excel(filepath: str) -> List[str]:
 
 def search_company_in_csv(file: Path, companies: List[str]) -> List[str]:
     try:
-        df = pd.read_csv(file, encoding="utf-8", low_memory=False)
+        df = pd.read_csv(file, encoding="utf-8", low_memory=False, header=None)
     except Exception:
-        df = pd.read_csv(file, encoding="latin1", low_memory=False)
-    text_data = df.astype(str).apply(" ".join, axis=1).tolist()
+        df = pd.read_csv(
+            file, encoding="latin1", low_memory=False, header=None
+        )
+    company_names = df[1].astype(str).tolist()
+    normalize_companies = normalize_company_name(company_names=companies)
     return [
-        c for c in companies if any(is_similar(c, line) for line in text_data)
+        c
+        for c in normalize_companies
+        if any(is_similar(c, name) for name in company_names)
     ]
 
 
@@ -115,6 +135,19 @@ def save_results_to_excel(
     print(f"Результаты сохранены в файл: {output_file}")
 
 
+def search_company_in_opensanctions(companies: List[str]) -> List[str]:
+    found = []
+    for company in tqdm(companies, desc="OpenSanctions API"):
+        try:
+            url = f"https://api.opensanctions.org/match?q={company}"
+            res = requests.get(url, timeout=10)
+            if res.status_code == 200 and res.json().get("match") is not None:
+                found.append(company)
+        except Exception as e:
+            print(f"[!] Ошибка при запросе к OpenSanctions: {e}")
+    return found
+
+
 def main():
     input_file = "suppliers.xlsx"
     output_file = get_next_output_filename()
@@ -155,8 +188,9 @@ def main():
     for company in companies:
         row = [company]
         matched = []
+        normalized_company = normalize_company_name([company])[0]
         for key in SANCTIONS_URLS:
-            if company in results.get(key, []):
+            if normalized_company in results.get(key, []):
                 row.append("Yes")
                 matched.append(key)
             else:
@@ -165,6 +199,15 @@ def main():
         table_data.append(row)
 
     print(tabulate(table_data, headers=headers, tablefmt="grid"))
+
+    # Проверка через OpenSanctions API
+    try:
+        matches = search_company_in_opensanctions(companies)
+        results["OpenSanctions"] = matches
+    except Exception as e:
+        print(f"[!] Ошибка OpenSanctions API: {e}")
+        results["OpenSanctions"] = []
+
     save_results_to_excel(results, companies, output_file)
     input("\nПроверка завершена. Нажмите Enter для выхода...")
 
