@@ -8,7 +8,6 @@ from tabulate import tabulate
 from tqdm import tqdm
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
-import os
 
 SANCTIONS_URLS = {
     "OFAC": "https://www.treasury.gov/ofac/downloads/sdn.csv",
@@ -18,8 +17,9 @@ SANCTIONS_URLS = {
     "BIS": "https://bis.doc.gov/index.php/documents/denied-persons-list/1140-dpl-pdf/file",
     "EU-Tracker": "https://data.europa.eu/apps/eusanctionstracker/entities/",
     "EU-SanctionsMap": "https://sanctionsmap.eu/#/main",
-    "UN-SC": "https://main.un.org/securitycouncil/en/sanctions/information"
+    "UN-SC": "https://main.un.org/securitycouncil/en/sanctions/information",
 }
+
 
 def download_file(url: str, filename: Path):
     print(f"Загрузка: {url}")
@@ -30,29 +30,45 @@ def download_file(url: str, filename: Path):
     else:
         print(f"Ошибка при загрузке {url}: {response.status_code}")
 
+
 def is_similar(a: str, b: str, threshold: float = 0.85) -> bool:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio() >= threshold
 
+
 def load_companies_from_excel(filepath: str) -> List[str]:
     df = pd.read_excel(filepath)
-    return df['Company'].dropna().astype(str).tolist()
+    return df["Company"].dropna().astype(str).tolist()
+
 
 def search_company_in_csv(file: Path, companies: List[str]) -> List[str]:
     try:
-        df = pd.read_csv(file, encoding='utf-8', low_memory=False)
-    except:
-        df = pd.read_csv(file, encoding='latin1', low_memory=False)
-    text_data = df.astype(str).apply(' '.join, axis=1).tolist()
-    return [c for c in companies if any(is_similar(c, line) for line in text_data)]
+        df = pd.read_csv(file, encoding="utf-8", low_memory=False)
+    except Exception:
+        df = pd.read_csv(file, encoding="latin1", low_memory=False)
+    text_data = df.astype(str).apply(" ".join, axis=1).tolist()
+    return [
+        c for c in companies if any(is_similar(c, line) for line in text_data)
+    ]
+
 
 def search_company_in_xml(file: Path, companies: List[str]) -> List[str]:
     root = ET.parse(file).getroot()
-    text = ET.tostring(root, encoding='utf-8', method='text').decode('utf-8')
-    return [c for c in companies if any(is_similar(c, line) for line in text.splitlines())]
+    text = ET.tostring(root, encoding="utf-8", method="text").decode("utf-8")
+    return [
+        c
+        for c in companies
+        if any(is_similar(c, line) for line in text.splitlines())
+    ]
+
 
 def search_company_in_html(file: Path, companies: List[str]) -> List[str]:
-    text = file.read_text(encoding='utf-8', errors='ignore')
-    return [c for c in companies if any(is_similar(c, line) for line in text.splitlines())]
+    text = file.read_text(encoding="utf-8", errors="ignore")
+    return [
+        c
+        for c in companies
+        if any(is_similar(c, line) for line in text.splitlines())
+    ]
+
 
 def get_next_output_filename(base: str = "suppliers_output.xlsx") -> str:
     i = 1
@@ -61,20 +77,34 @@ def get_next_output_filename(base: str = "suppliers_output.xlsx") -> str:
         i += 1
     return base
 
-def save_results_to_excel(results: dict, companies: List[str], output_file: str):
+
+def save_results_to_excel(
+    results: dict, companies: List[str], output_file: str
+):
     data = []
     for company in companies:
-        status = {key: "Yes" if company in matches else "No" for key, matches in results.items()}
+        status = {
+            key: "Yes" if company in matches else "No"
+            for key, matches in results.items()
+        }
         matched_lists = [k for k, v in status.items() if v == "Yes"]
-        info = f"Есть санкции — {matched_lists}" if matched_lists else "Нет санкций"
+        info = (
+            f"Есть санкции — {matched_lists}"
+            if matched_lists
+            else "Нет санкций"
+        )
         data.append({"Company": company, **status, "Sanctions Info": info})
     df_out = pd.DataFrame(data)
     df_out.to_excel(output_file, index=False)
 
     wb = load_workbook(output_file)
     ws = wb.active
-    fill_yes = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-    fill_no = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+    fill_yes = PatternFill(
+        start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
+    )
+    fill_no = PatternFill(
+        start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
+    )
     for row in ws.iter_rows(min_row=2, min_col=2, max_col=ws.max_column - 1):
         for cell in row:
             if cell.value == "Yes":
@@ -84,6 +114,7 @@ def save_results_to_excel(results: dict, companies: List[str], output_file: str)
     wb.save(output_file)
     print(f"Результаты сохранены в файл: {output_file}")
 
+
 def main():
     input_file = "suppliers.xlsx"
     output_file = get_next_output_filename()
@@ -91,18 +122,29 @@ def main():
     results = {}
     Path("sanctions").mkdir(exist_ok=True)
 
-    for name, url in tqdm(SANCTIONS_URLS.items(), desc='Обработка списков', unit='источник'):
-        ext = ".html" if "Tracker" in name or "Map" in name or "UN-SC" in name else (
-              ".xml" if name in ["EU", "UN"] else ".csv")
+    for name, url in tqdm(
+        SANCTIONS_URLS.items(), desc="Обработка списков", unit="источник"
+    ):
+        ext = (
+            ".html"
+            if "Tracker" in name or "Map" in name or "UN-SC" in name
+            else (".xml" if name in ["EU", "UN"] else ".csv")
+        )
         path = Path(f"sanctions/{name}{ext}")
         try:
             download_file(url, path)
             if ext == ".csv":
-                matches = search_company_in_csv(path, tqdm(companies, desc=f'{name}'))
+                matches = search_company_in_csv(
+                    path, tqdm(companies, desc=f"{name}")
+                )
             elif ext == ".xml":
-                matches = search_company_in_xml(path, tqdm(companies, desc=f'{name}'))
+                matches = search_company_in_xml(
+                    path, tqdm(companies, desc=f"{name}")
+                )
             else:
-                matches = search_company_in_html(path, tqdm(companies, desc=f'{name}'))
+                matches = search_company_in_html(
+                    path, tqdm(companies, desc=f"{name}")
+                )
             results[name] = matches
         except Exception as e:
             print(f"[!] Ошибка при обработке {name}: {e}")
@@ -125,6 +167,7 @@ def main():
     print(tabulate(table_data, headers=headers, tablefmt="grid"))
     save_results_to_excel(results, companies, output_file)
     input("\nПроверка завершена. Нажмите Enter для выхода...")
+
 
 if __name__ == "__main__":
     main()
