@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging.config
 from datetime import datetime
 from aiogram import Bot
@@ -27,9 +28,13 @@ async def check_sanctions(uploaded_file_path: str, chat_id: int, bot: Bot):
     date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_file = f"{settings.RESULT_DIR}/sanctions_companies_{date_str}.xlsx"
     logger.info("Starting sanctions check process")
-    original_companies = load_companies_from_excel(uploaded_file_path)
+    original_companies = await asyncio.to_thread(
+        load_companies_from_excel, uploaded_file_path
+    )
     logger.info(f"Loaded {len(original_companies)} companies from input file")
-    normalized_companies = normalize_company_name(original_companies)
+    normalized_companies = await asyncio.to_thread(
+        normalize_company_name, original_companies
+    )
     os.makedirs(settings.TMP_DIR_SCRAPER, exist_ok=True)
     os.makedirs(settings.RESULT_DIR, exist_ok=True)
     results = {}
@@ -39,8 +44,9 @@ async def check_sanctions(uploaded_file_path: str, chat_id: int, bot: Bot):
         file_path = Path(f"{settings.TMP_DIR_SCRAPER}/{name}{ext}")
         logger.info(f"Processing {name} sanctions list from {url}")
         try:
-            download_file(url, file_path)
-            matches = search_matches(
+            await asyncio.to_thread(download_file, url, file_path)
+            matches = await asyncio.to_thread(
+                search_matches,
                 file=file_path,
                 companies=normalized_companies,
                 source_name=name,
@@ -52,7 +58,8 @@ async def check_sanctions(uploaded_file_path: str, chat_id: int, bot: Bot):
             logger.error(f"Failed to process {name}: {e}", exc_info=True)
             results[name] = []
     logger.info("Generating final report...")
-    save_results_to_excel(
+    await asyncio.to_thread(
+        save_results_to_excel,
         results=results,
         original_companies=original_companies,
         normalized_companies=normalized_companies,
