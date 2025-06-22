@@ -15,7 +15,7 @@ from src.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-async def main() -> None:
+async def main():
     logging.config.dictConfig(logging_config)
     logger.info("Starting BOTV")
     bot: Bot = Bot(

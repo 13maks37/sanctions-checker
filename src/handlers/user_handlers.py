@@ -8,7 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.operations import UserDAO
 from src.keyboards.inline.keyboard import generate_inline_keyboard
-from src.services.sanctions_scraper import scrape_sanctions_companies
+from src.services.sanctions_service import check_sanctions
 from src.core.config import settings
 
 
@@ -124,7 +124,7 @@ async def process_file(message: Message, state: FSMContext, bot: Bot):
     await message.bot.download(document, destination=file_path)
     await message.answer("The file has been received and is being processed.")
     await state.clear()
-    await scrape_sanctions_companies(
+    await check_sanctions(
         uploaded_file_path=file_path,
         chat_id=message.from_user.id,
         bot=bot,
