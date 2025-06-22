@@ -10,3 +10,4 @@ alembic==1.14.1
 asyncpg==0.30.0
 pydantic==2.10.6
 pydantic-settings==2.8.1
+beautifulsoup4==4.12.3

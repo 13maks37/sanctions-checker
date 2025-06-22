@@ -1,11 +1,11 @@
 import os
+from datetime import datetime
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, Document
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import uuid4
 from src.db.operations import UserDAO
 from src.keyboards.inline.keyboard import generate_inline_keyboard
 from src.services.sanctions_scraper import scrape_sanctions_companies
@@ -109,15 +109,18 @@ async def process_file(message: Message, state: FSMContext, bot: Bot):
         )
         return
     file_name = document.file_name
-    file_ext = os.path.splitext(file_name)[1].lower()
+    file_root, file_ext = os.path.splitext(file_name)
+    file_ext = file_ext.lower()
     if file_ext not in [".xls", ".xlsx"]:
         await message.answer(
-            "Invalid file format. Only <b>.xls or .xlsx</b> accepted."
+            "Invalid file format. Only <b>.xls or .xlsx</b> accepted. "
+            "Please send a file in <b>.xls or .xlsx</b> format."
         )
         return
     os.makedirs(settings.TMP_DIR_BOT, exist_ok=True)
-    unique_filename = f"{uuid4().hex}_{file_name}"
-    file_path = f"{settings.TMP_DIR_BOT}/{unique_filename}"
+    date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    unique_filename = f"{file_root}_{date_str}{file_ext}"
+    file_path = os.path.join(settings.TMP_DIR_BOT, unique_filename)
     await message.bot.download(document, destination=file_path)
     await message.answer("The file has been received and is being processed.")
     await state.clear()

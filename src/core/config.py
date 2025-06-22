@@ -54,15 +54,11 @@ class Settings(BaseSettings):
             "url": "https://data.europa.eu/apps/eusanctionstracker/entities/",
             "ext": ".html",
         },
-        "EU-SanctionsMap": {
-            "url": "https://sanctionsmap.eu/#/main",
-            "ext": ".html",
-        },
         "UN-SC": {
             "url": (
-                "https://main.un.org/securitycouncil/en/sanctions/information"
+                "https://scsanctions.un.org/resources/xml/en/consolidated.xml"
             ),
-            "ext": ".html",
+            "ext": ".xml",
         },
     }
 
