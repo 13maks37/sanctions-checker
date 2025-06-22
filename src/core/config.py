@@ -16,9 +16,9 @@ class Settings(BaseSettings):
     REDIS_PORT: int
 
     MAIN_MENU_BOT: dict = {
-        "/start": "Старт бота и регистрация",
-        "/menu": "Главное меню",
-        "/help": "Техническая поддержка",
+        "/start": "Start the bot",
+        "/menu": "Main menu",
+        "/help": "Technical support",
     }
 
     model_config = ConfigDict(
