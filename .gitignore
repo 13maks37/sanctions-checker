@@ -137,5 +137,7 @@ ruff.toml
 # Temp
 tmp/
 
+# Result
 *.xlsx
 *.csv
+results/
