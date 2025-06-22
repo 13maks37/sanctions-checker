@@ -6,7 +6,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
 from src.core.logger import logging_config
 
-# from src.utils.set_main_menu_bot import set_main_menu
+from src.keyboards.set_main_menu_bot import set_main_menu
 # from src.handlers import user_handler
 from src.db.connect import AsyncSessionLocal
 from src.utils.middlewares import DBSessionMiddleware
@@ -33,7 +33,7 @@ async def main() -> None:
     dp: Dispatcher = Dispatcher(storage=storage)
 
     # Настраиваем кнопку Menu бота
-    # await set_main_menu(bot)
+    await set_main_menu(bot)
 
     # Добавляем миддлварь для сессий к БД
     dp.update.middleware(DBSessionMiddleware(AsyncSessionLocal))
