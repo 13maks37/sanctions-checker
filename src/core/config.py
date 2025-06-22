@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     TMP_DIR_BOT: str = "tmp/bot_uploads"
     TMP_DIR_SCRAPER: str = "tmp/scraper_uploads"
-    TMP_DIR_RESULT: str = "tmp/scraper_result"
+    RESULT_DIR: str = "results"
 
     SANCTIONS_SOURCES: dict[str, dict] = {
         "OFAC": {

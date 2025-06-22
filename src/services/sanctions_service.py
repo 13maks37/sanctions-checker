@@ -10,6 +10,7 @@ from src.utils.text_utils import normalize_company_name
 from src.utils.file_handlers import (
     load_companies_from_excel,
     save_results_to_excel,
+    clean_tmp_folders,
 )
 from src.utils.web_scraper import search_matches, download_file
 
@@ -24,15 +25,13 @@ async def check_sanctions(uploaded_file_path: str, chat_id: int, bot: Bot):
     and sends the final report to the user.
     """
     date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_file = (
-        f"{settings.TMP_DIR_RESULT}/sanctions_companies_{date_str}.xlsx"
-    )
+    output_file = f"{settings.RESULT_DIR}/sanctions_companies_{date_str}.xlsx"
     logger.info("Starting sanctions check process")
     original_companies = load_companies_from_excel(uploaded_file_path)
     logger.info(f"Loaded {len(original_companies)} companies from input file")
     normalized_companies = normalize_company_name(original_companies)
     os.makedirs(settings.TMP_DIR_SCRAPER, exist_ok=True)
-    os.makedirs(settings.TMP_DIR_RESULT, exist_ok=True)
+    os.makedirs(settings.RESULT_DIR, exist_ok=True)
     results = {}
     for name, source in settings.SANCTIONS_SOURCES.items():
         url = source["url"]
@@ -66,3 +65,4 @@ async def check_sanctions(uploaded_file_path: str, chat_id: int, bot: Bot):
         document=ready_file,
     )
     logger.info("Results successfully sent to user")
+    clean_tmp_folders(folders=[settings.TMP_DIR_BOT, settings.TMP_DIR_SCRAPER])
