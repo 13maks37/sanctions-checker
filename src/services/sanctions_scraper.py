@@ -22,13 +22,13 @@ logger = logging.getLogger(name="sanctions_scraper")
 
 
 def download_file(url: str, filename: Path):
-    print(f"Загрузка: {url}")
+    logger.info(f"Downloading: {url}")
     response = requests.get(url, stream=True)
     if response.status_code == 200:
         filename.write_bytes(response.content)
-        print(f"Сохранено: {filename}")
+        logger.info(f"Saved: {filename}")
     else:
-        print(f"Ошибка при загрузке {url}: {response.status_code}")
+        logger.error(f"Error downloading {url}: {response.status_code}")
 
 
 def normalize_company_name(company_names: str):
@@ -146,24 +146,30 @@ def search_company_in_html(
 
 
 def save_results_to_excel(
-    results: dict, companies: List[str], output_file: str
+    results: dict,
+    original_companies: List[str],
+    normalized_companies: List[str],
+    output_file: str,
 ):
+    logger.info(
+        f"Saving results for {len(original_companies)} "
+        f"companies to {output_file}"
+    )
     data = []
-    for company in companies:
+    for original, normalized in zip(original_companies, normalized_companies):
         status = {
-            key: "Yes" if company in matches else "No"
+            key: "Yes" if normalized in matches else "No"
             for key, matches in results.items()
         }
         matched_lists = [k for k, v in status.items() if v == "Yes"]
         info = (
-            f"Есть санкции — {matched_lists}"
+            f"Sanctions found in — {matched_lists}"
             if matched_lists
-            else "Нет санкций"
+            else "No sanctions found"
         )
-        data.append({"Company": company, **status, "Sanctions Info": info})
+        data.append({"Company": original, **status, "Sanctions Info": info})
     df_out = pd.DataFrame(data)
     df_out.to_excel(output_file, index=False)
-
     wb = load_workbook(output_file)
     ws = wb.active
     fill_yes = PatternFill(
@@ -179,7 +185,7 @@ def save_results_to_excel(
             elif cell.value == "No":
                 cell.fill = fill_no
     wb.save(output_file)
-    print(f"Результаты сохранены в файл: {output_file}")
+    logger.info(f"Results saved to file: {output_file}")
 
 
 async def scrape_sanctions_companies(
@@ -189,59 +195,51 @@ async def scrape_sanctions_companies(
     output_file = (
         f"{settings.TMP_DIR_RESULT}/sanctions_companies_{date_str}.xlsx"
     )
+    logger.info("Starting sanctions check process")
     original_companies = load_companies_from_excel(uploaded_file_path)
-    companies = normalize_company_name(original_companies)
-    results = {}
+    logger.info(f"Loaded {len(original_companies)} companies from input file")
+    normalized_companies = normalize_company_name(original_companies)
     os.makedirs(settings.TMP_DIR_SCRAPER, exist_ok=True)
     os.makedirs(settings.TMP_DIR_RESULT, exist_ok=True)
-
+    results = {}
     for name, source in settings.SANCTIONS_SOURCES.items():
         url = source["url"]
         ext = source["ext"]
-        uploads_scraper = f"{settings.TMP_DIR_SCRAPER}/{name}{ext}"
+        file_path = Path(f"{settings.TMP_DIR_SCRAPER}/{name}{ext}")
+        logger.info(f"Processing {name} sanctions list from {url}")
         try:
-            logger.info(f"Scraping {name}")
-            download_file(url, Path(uploads_scraper))
+            download_file(url, file_path)
             if ext == ".csv":
                 matches = search_company_in_csv(
-                    file=Path(uploads_scraper),
-                    companies=companies,
+                    file=file_path,
+                    companies=normalized_companies,
                     source_name=name,
                 )
             elif ext == ".xml":
                 matches = search_company_in_xml(
-                    file=Path(uploads_scraper),
-                    companies=companies,
+                    file=file_path,
+                    companies=normalized_companies,
                     source_name=name,
                 )
             else:
                 matches = search_company_in_html(
-                    file=Path(uploads_scraper),
-                    companies=companies,
+                    file=file_path,
+                    companies=normalized_companies,
                     source_name=name,
                 )
             results[name] = matches
+            logger.info(f"Processed {name}.Found {len(matches)} matches")
         except Exception as e:
-            print(f"Ошибка при обработке {name}: {e}")
+            logger.error(f"Failed to process {name}: {e}", exc_info=True)
             results[name] = []
-    table_data = []
-    for i, company in enumerate(companies):
-        original = original_companies[i]
-        row = [original]
-        matched = []
-        for key in settings.SANCTIONS_SOURCES:
-            if company in results.get(key, []):
-                row.append("Yes")
-                matched.append(key)
-            else:
-                row.append("No")
-        row.append(f"Есть санкции — {matched}" if matched else "Нет санкций")
-        table_data.append(row)
-
-    save_results_to_excel(results, companies, output_file)
+    logger.info("Generating final report...")
+    save_results_to_excel(
+        results, original_companies, normalized_companies, output_file
+    )
     ready_file = FSInputFile(path=output_file)
     await bot.send_document(
         chat_id=chat_id,
-        caption="Ready!",
+        caption="Sanctions check completed",
         document=ready_file,
     )
+    logger.info("Results successfully sent to user")
