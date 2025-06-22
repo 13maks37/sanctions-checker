@@ -21,6 +21,10 @@ class Settings(BaseSettings):
         "/help": "Technical support",
     }
 
+    TMP_DIR_BOT: str = "/tmp/bot_uploads"
+    TMP_DIR_SCRAPER: str = "/tmp/scraper_uploads"
+    TMP_DIR_RESULT: str = "/tmp/scraper_result"
+
     model_config = ConfigDict(
         env_file=Path(__file__).parent.parent.parent / ".env",
         env_file_encoding="utf-8",

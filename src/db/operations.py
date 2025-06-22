@@ -100,3 +100,17 @@ class UserDAO(BaseDAO):
     """Class with operations for User model"""
 
     model = User
+
+    @classmethod
+    async def get_by_tg_id(cls, session: AsyncSession, tg_id: str):
+        """Get User elements by tg_id"""
+        try:
+            logger.info("Fetching User by Telegram ID")
+            query = select(cls.model).where(cls.model.tg_id == tg_id)
+            result = await session.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(
+                f"An error occurred while fetching User by Telegram ID: {e}",
+            )
+            raise e
